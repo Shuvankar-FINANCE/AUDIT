@@ -1,0 +1,115 @@
+import pandas as pd
+
+
+class ExcelFinancialAudit:
+    def __init__(self, input_file: str, output_file: str):
+        self.input_file = input_file
+        self.output_file = output_file
+        self.data = None
+        self.audit_results = []
+
+    def load_data(self):
+        """Loads the financial data from the Excel file."""
+        try:
+            # Load all sheets from the Excel file
+            self.data = pd.read_excel(self.input_file, sheet_name=None)  # Read all sheets as a dictionary
+            print(f"Successfully loaded data from {self.input_file}")
+        except Exception as e:
+            print(f"Error loading Excel file: {e}")
+            raise
+
+    def run_checks(self):
+        """Runs compliance checks on the loaded data."""
+        # Define compliance checks
+        checks = [
+            {
+                "rule": "Total assets must equal liabilities + equity",
+                "check": lambda row: row["Total Assets"] == row["Total Liabilities"] + row["Equity"],
+                "columns_required": ["Total Assets", "Total Liabilities", "Equity"],
+            },
+            {
+                "rule": "Revenue must not be negative",
+                "check": lambda row: row["Revenue"] >= 0,
+                "columns_required": ["Revenue"],
+            },
+            {
+                "rule": "Depreciation method must be valid (straight-line or diminishing-balance)",
+                "check": lambda row: row["Depreciation Method"] in ["straight_line", "diminishing_balance"],
+                "columns_required": ["Depreciation Method"],
+            },
+            {
+                "rule": "VAT Paid must be greater than or equal to VAT Collected",
+                "check": lambda row: row["VAT Paid"] >= row["VAT Collected"],
+                "columns_required": ["VAT Paid", "VAT Collected"],
+            },
+            {
+                "rule": "Employee expenses must be within legal thresholds",
+                "check": lambda row: row["Employee Expenses"] <= row["Legal Threshold"],
+                "columns_required": ["Employee Expenses", "Legal Threshold"],
+            },
+        ]
+
+        # Process each sheet in the Excel file
+        for sheet_name, sheet_data in self.data.items():
+            print(f"Processing sheet: {sheet_name}")
+            self._process_sheet(sheet_name, sheet_data, checks)
+
+    def _process_sheet(self, sheet_name, sheet_data, checks):
+        """Processes a single sheet of data for compliance checks."""
+        for index, row in sheet_data.iterrows():
+            for check in checks:
+                # Ensure all required columns are present
+                if not all(col in row.index for col in check["columns_required"]):
+                    self.audit_results.append({
+                        "Sheet": sheet_name,
+                        "Row": index + 1,
+                        "Rule": check["rule"],
+                        "Status": "Missing required columns",
+                    })
+                    continue
+
+                try:
+                    # Run the check
+                    if not check["check"](row):
+                        self.audit_results.append({
+                            "Sheet": sheet_name,
+                            "Row": index + 1,
+                            "Rule": check["rule"],
+                            "Status": "Failed",
+                        })
+                except Exception as e:
+                    self.audit_results.append({
+                        "Sheet": sheet_name,
+                        "Row": index + 1,
+                        "Rule": check["rule"],
+                        "Status": f"Error: {e}",
+                    })
+
+    def save_results(self):
+        """Saves the audit results to an Excel file."""
+        if not self.audit_results:
+            print("No flaws found. Audit results are empty.")
+            return
+
+        results_df = pd.DataFrame(self.audit_results)
+        results_df.to_excel(self.output_file, index=False)
+        print(f"Audit results saved to {self.output_file}")
+
+    def run(self):
+        """Runs the entire audit process."""
+        try:
+            self.load_data()
+            self.run_checks()
+            self.save_results()
+        except Exception as e:
+            print(f"Audit failed: {e}")
+
+
+if __name__ == "__main__":
+    # File paths (replace with actual file paths)
+    input_file_path = "Q3 2024 Databook KPIs - Excel.xlsx"  # Replace with your file name
+    output_file_path = "audit_results.xlsx"
+
+    # Perform the audit
+    auditor = ExcelFinancialAudit(input_file_path, output_file_path)
+    auditor.run()
